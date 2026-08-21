@@ -13,6 +13,8 @@ API_URL = (
 
 def main():
 
+    ingestion_id = os.environ["INGESTION_ID"]
+
     # --------------------------------------------------
     # 1. Consultar API
     # --------------------------------------------------
@@ -21,6 +23,10 @@ def main():
 
     response = requests.get(
         API_URL,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0"
+        },
         timeout=60
     )
 
@@ -32,6 +38,11 @@ def main():
 
     print("JSON recibido correctamente")
 
+    # Número de estaciones recibidas
+    record_count = len(payload["ListaEESSPrecio"])
+
+    print(f"Estaciones recibidas: {record_count}")
+    print(f"Ingestion ID: {ingestion_id}")
 
     # --------------------------------------------------
     # 2. Conectar con Snowflake
@@ -51,7 +62,31 @@ def main():
         cursor = conn.cursor()
 
         # --------------------------------------------------
-        # 3. Insertar JSON completo en RAW
+        # 3. Comprobar si esta ejecución ya existe
+        # --------------------------------------------------
+
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM RAW.FUEL_PRICES_JSON
+            WHERE INGESTION_ID = %s
+            """,
+            (ingestion_id,)
+        )
+
+        already_exists = cursor.fetchone()[0]
+
+        if already_exists > 0:
+
+            print(
+                f"La ejecución {ingestion_id} ya existe. "
+                "No se insertarán datos duplicados."
+            )
+
+            return
+
+        # --------------------------------------------------
+        # 4. Convertir JSON a texto
         # --------------------------------------------------
 
         payload_json = json.dumps(
@@ -59,19 +94,29 @@ def main():
             ensure_ascii=False
         )
 
+        # --------------------------------------------------
+        # 5. Insertar captura
+        # --------------------------------------------------
+
         cursor.execute(
             """
             INSERT INTO RAW.FUEL_PRICES_JSON (
+                INGESTION_ID,
                 INGESTION_TS,
+                RECORD_COUNT,
                 PAYLOAD,
                 SOURCE_URL
             )
             SELECT
+                %s,
                 CURRENT_TIMESTAMP(),
+                %s,
                 PARSE_JSON(%s),
                 %s
             """,
             (
+                ingestion_id,
+                record_count,
                 payload_json,
                 API_URL
             )
@@ -79,7 +124,13 @@ def main():
 
         conn.commit()
 
-        print("JSON completo insertado correctamente en RAW")
+        print(
+            f"Captura {ingestion_id} insertada correctamente."
+        )
+
+        print(
+            f"Registros insertados: {record_count}"
+        )
 
     finally:
 

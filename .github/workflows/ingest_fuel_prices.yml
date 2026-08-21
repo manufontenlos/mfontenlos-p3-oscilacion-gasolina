@@ -1,13 +1,14 @@
-name: Test Snowflake Connection
+name: Fuel prices ingestion
 
 on:
   workflow_dispatch:
 
 jobs:
-  test-connection:
+  ingest-fuel-prices:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v6
 
@@ -17,9 +18,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
 
-      - name: Test Snowflake connection
+      - name: Ingest fuel prices
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
@@ -27,4 +29,7 @@ jobs:
           SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
           SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
           SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
-        run: python src/ingest_fuel_prices.py
+          INGESTION_ID: ${{ github.run_id }}
+
+        run: |
+          python src/ingest_fuel_prices.py
