@@ -1,8 +1,16 @@
 import os
 import json
+
 import requests
 import snowflake.connector
 
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+
+# ============================================================
+# Configuración
+# ============================================================
 
 API_URL = (
     "https://sedeaplicaciones.minetur.gob.es/"
@@ -11,42 +19,116 @@ API_URL = (
 )
 
 
+# ============================================================
+# Función principal
+# ============================================================
+
 def main():
+
+    # --------------------------------------------------------
+    # 1. Obtener identificador de ejecución
+    # --------------------------------------------------------
 
     ingestion_id = os.environ["INGESTION_ID"]
 
-    # --------------------------------------------------
-    # 1. Consultar API
-    # --------------------------------------------------
+    print("========================================")
+    print("INICIO DE INGESTA")
+    print("========================================")
+    print(f"Ingestion ID: {ingestion_id}")
+
+
+    # --------------------------------------------------------
+    # 2. Configurar sesión HTTP con reintentos
+    # --------------------------------------------------------
+
+    retry_strategy = Retry(
+        total=5,
+        connect=5,
+        read=5,
+        backoff_factor=5,
+        status_forcelist=[
+            429,
+            500,
+            502,
+            503,
+            504
+        ],
+        allowed_methods=["GET"]
+    )
+
+    adapter = HTTPAdapter(
+        max_retries=retry_strategy
+    )
+
+    session = requests.Session()
+
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+
+
+    # --------------------------------------------------------
+    # 3. Consultar API
+    # --------------------------------------------------------
 
     print("Consultando API del Ministerio...")
 
-    response = requests.get(
+    response = session.get(
         API_URL,
         headers={
             "Accept": "application/json",
             "User-Agent": "Mozilla/5.0"
         },
-        timeout=60
+        timeout=120
     )
 
     response.raise_for_status()
 
     print(f"HTTP status: {response.status_code}")
 
+
+    # --------------------------------------------------------
+    # 4. Parsear JSON
+    # --------------------------------------------------------
+
     payload = response.json()
 
     print("JSON recibido correctamente")
 
-    # Número de estaciones recibidas
-    record_count = len(payload["ListaEESSPrecio"])
 
-    print(f"Estaciones recibidas: {record_count}")
-    print(f"Ingestion ID: {ingestion_id}")
+    # --------------------------------------------------------
+    # 5. Contar estaciones
+    # --------------------------------------------------------
 
-    # --------------------------------------------------
-    # 2. Conectar con Snowflake
-    # --------------------------------------------------
+    if "ListaEESSPrecio" not in payload:
+        raise ValueError(
+            "La respuesta de la API no contiene "
+            "'ListaEESSPrecio'"
+        )
+
+    record_count = len(
+        payload["ListaEESSPrecio"]
+    )
+
+    print(
+        f"Estaciones recibidas: {record_count}"
+    )
+
+
+    # --------------------------------------------------------
+    # 6. Convertir JSON a texto
+    # --------------------------------------------------------
+
+    payload_json = json.dumps(
+        payload,
+        ensure_ascii=False
+    )
+
+
+    # --------------------------------------------------------
+    # 7. Conectar con Snowflake
+    # --------------------------------------------------------
+
+    print("Conectando con Snowflake...")
 
     conn = snowflake.connector.connect(
         account=os.environ["SNOWFLAKE_ACCOUNT"],
@@ -57,13 +139,19 @@ def main():
         schema=os.environ["SNOWFLAKE_SCHEMA"],
     )
 
+
     try:
 
         cursor = conn.cursor()
 
-        # --------------------------------------------------
-        # 3. Comprobar si esta ejecución ya existe
-        # --------------------------------------------------
+        # ----------------------------------------------------
+        # 8. Comprobar si la ejecución ya existe
+        # ----------------------------------------------------
+
+        print(
+            "Comprobando si la ejecución "
+            "ya existe en Snowflake..."
+        )
 
         cursor.execute(
             """
@@ -76,27 +164,32 @@ def main():
 
         already_exists = cursor.fetchone()[0]
 
+
+        # ----------------------------------------------------
+        # 9. Evitar duplicados
+        # ----------------------------------------------------
+
         if already_exists > 0:
 
             print(
-                f"La ejecución {ingestion_id} ya existe. "
+                f"La ejecución {ingestion_id} "
+                "ya existe en Snowflake."
+            )
+
+            print(
                 "No se insertarán datos duplicados."
             )
 
             return
 
-        # --------------------------------------------------
-        # 4. Convertir JSON a texto
-        # --------------------------------------------------
 
-        payload_json = json.dumps(
-            payload,
-            ensure_ascii=False
+        # ----------------------------------------------------
+        # 10. Insertar JSON completo en RAW
+        # ----------------------------------------------------
+
+        print(
+            "Insertando JSON completo en Snowflake..."
         )
-
-        # --------------------------------------------------
-        # 5. Insertar captura
-        # --------------------------------------------------
 
         cursor.execute(
             """
@@ -122,21 +215,41 @@ def main():
             )
         )
 
+
+        # ----------------------------------------------------
+        # 11. Confirmar transacción
+        # ----------------------------------------------------
+
         conn.commit()
 
         print(
-            f"Captura {ingestion_id} insertada correctamente."
+            "JSON completo insertado "
+            "correctamente en Snowflake."
         )
 
         print(
-            f"Registros insertados: {record_count}"
+            f"Registros de estaciones: {record_count}"
         )
+
 
     finally:
 
         cursor.close()
         conn.close()
 
+
+    # --------------------------------------------------------
+    # 12. Fin
+    # --------------------------------------------------------
+
+    print("========================================")
+    print("INGESTA FINALIZADA CORRECTAMENTE")
+    print("========================================")
+
+
+# ============================================================
+# Entry point
+# ============================================================
 
 if __name__ == "__main__":
     main()
