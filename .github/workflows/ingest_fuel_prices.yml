@@ -1,26 +1,44 @@
 name: Fuel prices ingestion
 
 on:
+  # Ejecución automática cada 3 horas
+  schedule:
+    - cron: "0 */3 * * *"
+
+  # Permite ejecutar el proceso manualmente desde GitHub
   workflow_dispatch:
 
 jobs:
   ingest-fuel-prices:
+
     runs-on: ubuntu-latest
 
     steps:
 
+      # --------------------------------------------------
+      # 1. Descargar el repositorio
+      # --------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      # --------------------------------------------------
+      # 2. Configurar Python
+      # --------------------------------------------------
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
+      # --------------------------------------------------
+      # 3. Instalar dependencias
+      # --------------------------------------------------
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
 
+      # --------------------------------------------------
+      # 4. Ejecutar ingesta
+      # --------------------------------------------------
       - name: Ingest fuel prices
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
@@ -29,6 +47,8 @@ jobs:
           SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
           SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
           SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+
+          # Identificador único de la ejecución
           INGESTION_ID: ${{ github.run_id }}
 
         run: |
