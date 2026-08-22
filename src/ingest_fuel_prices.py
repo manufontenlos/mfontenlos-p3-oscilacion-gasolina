@@ -1,12 +1,10 @@
 import os
+import time
 import json
-
+import subprocess
 import requests
 import snowflake.connector
-
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-
+from datetime import datetime, timezone
 
 # ============================================================
 # Configuración
@@ -17,6 +15,112 @@ API_URL = (
     "ServiciosRESTCarburantes/PreciosCarburantes/"
     "EstacionesTerrestres/"
 )
+
+
+def get_api_data():
+    """
+    Descarga los datos de la API del Ministerio.
+
+    Estrategia:
+    1. requests con varios reintentos.
+    2. Si requests falla, utiliza curl como fallback.
+    """
+
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json",
+        "Connection": "close"
+    }
+
+    # -----------------------------------------
+    # INTENTOS CON REQUESTS
+    # -----------------------------------------
+
+    wait_times = [10, 30, 60, 120, 180]
+
+    for attempt, wait_time in enumerate(wait_times, start=1):
+
+        try:
+            print(
+                f"Intento {attempt}/{len(wait_times)} "
+                "de conexión con la API..."
+            )
+
+            # Crear una sesión nueva en cada intento
+            session = requests.Session()
+
+            response = session.get(
+                API_URL,
+                headers=headers,
+                timeout=(30, 180)
+            )
+
+            response.raise_for_status()
+
+            data = response.json()
+
+            print("API consultada correctamente")
+            print(f"HTTP status: {response.status_code}")
+
+            return data
+
+        except Exception as e:
+
+            print(
+                f"Error en intento {attempt}: "
+                f"{type(e).__name__}: {e}"
+            )
+
+            if attempt < len(wait_times):
+                print(
+                    f"Esperando {wait_time} segundos "
+                    "antes del siguiente intento..."
+                )
+                time.sleep(wait_time)
+
+    # -----------------------------------------
+    # FALLBACK CON CURL
+    # -----------------------------------------
+
+    print("=" * 50)
+    print("Todos los intentos con requests han fallado.")
+    print("Intentando descargar la API mediante curl...")
+    print("=" * 50)
+
+    try:
+
+        result = subprocess.run(
+            [
+                "curl",
+                "-L",
+                "--retry", "5",
+                "--retry-delay", "10",
+                "--retry-all-errors",
+                "--connect-timeout", "30",
+                "--max-time", "300",
+                "-A", "Mozilla/5.0",
+                "-H", "Accept: application/json",
+                API_URL
+            ],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        data = json.loads(result.stdout)
+
+        print("API descargada correctamente mediante curl")
+
+        return data
+
+    except Exception as e:
+
+        print("=" * 50)
+        print("ERROR: no se ha podido descargar la API.")
+        print(f"Detalle: {e}")
+        print("=" * 50)
+
+        raise
 
 
 # ============================================================
@@ -72,25 +176,18 @@ def main():
 
     print("Consultando API del Ministerio...")
 
-    response = session.get(
-        API_URL,
-        headers={
-            "Accept": "application/json",
-            "User-Agent": "Mozilla/5.0"
-        },
-        timeout=120
-    )
+    data = get_api_data()
 
-    response.raise_for_status()
+    print("JSON recibido correctamente")
 
-    print(f"HTTP status: {response.status_code}")
+    print(f"HTTP status: {data.status_code}")
 
 
     # --------------------------------------------------------
     # 4. Parsear JSON
     # --------------------------------------------------------
 
-    payload = response.json()
+    payload = data.json()
 
     print("JSON recibido correctamente")
 
