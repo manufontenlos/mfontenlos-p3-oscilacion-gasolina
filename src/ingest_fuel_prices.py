@@ -5,6 +5,8 @@ import subprocess
 import requests
 import snowflake.connector
 from datetime import datetime, timezone
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
 
 # ============================================================
 # Configuración
