@@ -182,6 +182,17 @@ def main():
 
     print("JSON recibido correctamente")
 
+    print(f"HTTP status: {data.status_code}")
+
+
+    # --------------------------------------------------------
+    # 4. Parsear JSON
+    # --------------------------------------------------------
+
+    payload = data.json()
+
+    print("JSON recibido correctamente")
+
 
     # --------------------------------------------------------
     # 5. Contar estaciones
