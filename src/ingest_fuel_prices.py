@@ -182,14 +182,6 @@ def main():
 
     print("JSON recibido correctamente")
 
-    # --------------------------------------------------------
-    # 4. Parsear JSON
-    # --------------------------------------------------------
-
-    payload = data.json()
-
-    print("JSON recibido correctamente")
-
 
     # --------------------------------------------------------
     # 5. Contar estaciones
