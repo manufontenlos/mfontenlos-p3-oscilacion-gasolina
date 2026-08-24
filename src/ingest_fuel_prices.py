@@ -182,9 +182,6 @@ def main():
 
     print("JSON recibido correctamente")
 
-    print(f"HTTP status: {data.status_code}")
-
-
     # --------------------------------------------------------
     # 4. Parsear JSON
     # --------------------------------------------------------
