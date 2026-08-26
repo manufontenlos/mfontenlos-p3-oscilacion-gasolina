@@ -5,8 +5,7 @@ import subprocess
 import requests
 import snowflake.connector
 from datetime import datetime, timezone
-from urllib3.util.retry import Retry
-from requests.adapters import HTTPAdapter
+
 
 # ============================================================
 # Configuración
@@ -19,13 +18,21 @@ API_URL = (
 )
 
 
+# ============================================================
+# Obtener datos de la API
+# ============================================================
+
 def get_api_data():
     """
     Descarga los datos de la API del Ministerio.
 
     Estrategia:
-    1. requests con varios reintentos.
-    2. Si requests falla, utiliza curl como fallback.
+    1. Intenta obtener los datos mediante requests.
+    2. Si requests falla, realiza varios reintentos.
+    3. Si todos los intentos fallan, utiliza curl como fallback.
+
+    Devuelve:
+        dict: JSON de la API convertido a diccionario Python.
     """
 
     headers = {
@@ -34,9 +41,9 @@ def get_api_data():
         "Connection": "close"
     }
 
-    # -----------------------------------------
-    # INTENTOS CON REQUESTS
-    # -----------------------------------------
+    # --------------------------------------------------------
+    # Intentos con requests
+    # --------------------------------------------------------
 
     wait_times = [10, 30, 60, 120, 180]
 
@@ -59,6 +66,7 @@ def get_api_data():
 
             response.raise_for_status()
 
+            # Convertir respuesta JSON a diccionario Python
             data = response.json()
 
             print("API consultada correctamente")
@@ -74,15 +82,17 @@ def get_api_data():
             )
 
             if attempt < len(wait_times):
+
                 print(
                     f"Esperando {wait_time} segundos "
                     "antes del siguiente intento..."
                 )
+
                 time.sleep(wait_time)
 
-    # -----------------------------------------
-    # FALLBACK CON CURL
-    # -----------------------------------------
+    # --------------------------------------------------------
+    # Fallback con curl
+    # --------------------------------------------------------
 
     print("=" * 50)
     print("Todos los intentos con requests han fallado.")
@@ -109,6 +119,7 @@ def get_api_data():
             check=True
         )
 
+        # Convertir respuesta de curl a diccionario Python
         data = json.loads(result.stdout)
 
         print("API descargada correctamente mediante curl")
@@ -144,65 +155,42 @@ def main():
 
 
     # --------------------------------------------------------
-    # 2. Configurar sesión HTTP con reintentos
-    # --------------------------------------------------------
-
-    retry_strategy = Retry(
-        total=5,
-        connect=5,
-        read=5,
-        backoff_factor=5,
-        status_forcelist=[
-            429,
-            500,
-            502,
-            503,
-            504
-        ],
-        allowed_methods=["GET"]
-    )
-
-    adapter = HTTPAdapter(
-        max_retries=retry_strategy
-    )
-
-    session = requests.Session()
-
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
-
-
-    # --------------------------------------------------------
-    # 3. Consultar API
+    # 2. Consultar API
     # --------------------------------------------------------
 
     print("Consultando API del Ministerio...")
 
+    # get_api_data() devuelve directamente un diccionario
     data = get_api_data()
 
     print("JSON recibido correctamente")
 
-    print(f"HTTP status: {data.status_code}")
+
+    # --------------------------------------------------------
+    # 3. Parsear JSON
+    # --------------------------------------------------------
+
+    # No usamos data.json() porque data ya es un dict
+    payload = data
+
+    print("JSON parseado correctamente")
 
 
     # --------------------------------------------------------
-    # 4. Parsear JSON
+    # 4. Validar estructura del JSON
     # --------------------------------------------------------
 
-    payload = data.json()
+    if "ListaEESSPrecio" not in payload:
 
-    print("JSON recibido correctamente")
+        raise ValueError(
+            "La respuesta de la API no contiene "
+            "'ListaEESSPrecio'"
+        )
 
 
     # --------------------------------------------------------
     # 5. Contar estaciones
     # --------------------------------------------------------
-
-    if "ListaEESSPrecio" not in payload:
-        raise ValueError(
-            "La respuesta de la API no contiene "
-            "'ListaEESSPrecio'"
-        )
 
     record_count = len(
         payload["ListaEESSPrecio"]
@@ -242,6 +230,7 @@ def main():
     try:
 
         cursor = conn.cursor()
+
 
         # ----------------------------------------------------
         # 8. Comprobar si la ejecución ya existe
