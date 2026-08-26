@@ -1,0 +1,71 @@
+use database fuel_prices;
+
+create schema gold;
+
+use schema gold;
+
+---------- Dimensión de estación  ----------------
+
+CREATE TABLE FUEL_PRICES.GOLD.DIM_STATION (
+    STATION_KEY NUMBER(38,0),
+    IDEESS VARCHAR,
+    ROTULO VARCHAR,
+    DIRECCION VARCHAR,
+    MUNICIPIO VARCHAR,
+    PROVINCIA VARCHAR,
+    CCAA VARCHAR,
+    LAT NUMBER(10,6),
+    LON NUMBER(10,6)
+);
+
+CREATE TABLE FUEL_PRICES.GOLD.DIM_PRODUCT (
+    PRODUCT_KEY NUMBER(38,0),
+    PRODUCT VARCHAR
+);
+
+
+CREATE TABLE FUEL_PRICES.GOLD.DIM_DATETIME (
+    DATETIME_KEY NUMBER(38,0),
+    INGESTION_TS TIMESTAMP_TZ,
+    FECHA DATE,
+    HORA TIME,
+    DIA NUMBER,
+    MES NUMBER,
+    ANO NUMBER
+);
+
+CREATE TABLE FUEL_PRICES.GOLD.FACT_FUEL_PRICE (
+    STATION_KEY NUMBER(38,0),
+    PRODUCT_KEY NUMBER(38,0),
+    DATETIME_KEY NUMBER(38,0),
+    IDEESS VARCHAR,
+    INGESTION_TS TIMESTAMP_TZ,
+    PRICE_EUR_L NUMBER(10,3)
+);
+
+------------- COMPROBAMOS TABLAS ------------
+
+SELECT COUNT(*) FROM gold.dim_station;
+
+select count(*) from gold.dim_product;
+
+select count(*) from gold.dim_datetime;
+
+select count(*) from gold.fact_fuel_price;
+
+-------------- COMPROBAMOS GRANULARIDAD --------------
+
+SELECT
+    IDEESS,
+    PRODUCT_KEY,
+    INGESTION_TS,
+    COUNT(*) AS NUM_REGISTROS
+FROM GOLD.FACT_FUEL_PRICE
+GROUP BY
+    IDEESS,
+    PRODUCT_KEY,
+    INGESTION_TS
+HAVING COUNT(*) > 1;
+
+
+
