@@ -720,17 +720,53 @@ De esta forma se puede comprobar tanto la última ingesta como el volumen de inf
 El modelo GOLD sigue un esquema dimensional basado en una tabla de hechos y varias dimensiones.
 
 ```text
-                   DIM_STATION
-                        │
-                        │
-                        ▼
-                   ┌───────────┐
-                   │           │
-DIM_PRODUCT ───────│   FACT    │────── DIM_DATETIME
-                   │   FUEL    │
-                   │   PRICE   │
-                   │           │
-                   └───────────┘
+                    ┌─────────────────────┐
+                    │     DIM_STATION     │
+                    │─────────────────────│
+                    │ PK STATION_KEY      │
+                    │    IDEESS           │
+                    │    ROTULO           │
+                    │    DIRECCION        │
+                    │    MUNICIPIO        │
+                    │    PROVINCIA        │
+                    │    CCAA             │
+                    │    LAT              │
+                    │    LON              │
+                    └──────────┬──────────┘
+                               │
+                               │ FK STATION_KEY
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │  FACT_FUEL_PRICE    │
+                    │─────────────────────│
+                    │ FK STATION_KEY      │
+                    │ FK PRODUCT_KEY      │
+                    │ FK DATETIME_KEY     │
+                    │    IDEESS           │
+                    │    INGESTION_TS     │
+                    │    PRICE_EUR_L      │
+                    │                     │
+                    │ PK lógica:          │
+                    │ IDEESS +            │
+                    │ PRODUCT_KEY +       │
+                    │ INGESTION_TS        │
+                    └──────┬───────┬──────┘
+                           │       │
+              FK PRODUCT_KEY│       │FK DATETIME_KEY
+                           │       │
+                           ▼       ▼
+                ┌──────────────┐ ┌─────────────────┐
+                │ DIM_PRODUCT  │ │  DIM_DATETIME   │
+                │──────────────│ │─────────────────│
+                │ PK PRODUCT_  │ │ PK DATETIME_KEY │
+                │    KEY       │ │    INGESTION_TS │
+                │    PRODUCT   │ │    FECHA        │
+                └──────────────┘ │    HORA         │
+                                 │    DIA          │
+                                 │    MES          │
+                                 │    ANO          │
+                                 └─────────────────┘
 ```
 
 La tabla de hechos contiene los precios y las claves que permiten relacionarlos con:
